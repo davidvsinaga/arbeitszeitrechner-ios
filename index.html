@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbeitszeitrechner</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0b5cad">
+<!-- iPhone/iPad: Vollbild-App vom Home-Bildschirm -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Arbeitszeit">
+<style>
+  :root { --ok:#1f8a4c; --warn:#c77700; --bad:#c62828; --bg:#f4f6f9; --card:#fff; --txt:#1d2433; --muted:#6b7385; --accent:#0b5cad; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--txt); display:flex; justify-content:center; padding:32px 16px; }
+  .card { background:var(--card); border-radius:14px; box-shadow:0 4px 20px rgba(0,0,0,.08); padding:28px; width:100%; max-width:480px; }
+  h1 { margin:0 0 4px; font-size:1.5rem; }
+  .sub { color:var(--muted); margin:0 0 22px; font-size:.9rem; }
+  .row { display:flex; gap:14px; }
+  .row > div { flex:1; }
+  label { display:block; font-size:.85rem; color:var(--muted); margin-bottom:4px; }
+  input[type=time], input[type=number] { width:100%; padding:10px; font-size:1.1rem; border:1px solid #cfd5df; border-radius:8px; }
+  .results { margin-top:22px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .tile { background:var(--bg); border-radius:10px; padding:12px 14px; }
+  .tile .k { font-size:.78rem; color:var(--muted); }
+  .tile .v { font-size:1.45rem; font-weight:600; margin-top:2px; }
+  .status { margin-top:16px; padding:12px 14px; border-radius:10px; font-weight:500; }
+  .status.ok { background:#e6f4ec; color:var(--ok); }
+  .status.warn { background:#fff3e0; color:var(--warn); }
+  .status.bad { background:#fdecea; color:var(--bad); }
+  .bar { height:10px; background:#e2e6ec; border-radius:5px; margin-top:14px; overflow:hidden; }
+  .bar > span { display:block; height:100%; background:var(--ok); transition:width .3s; }
+  h2 { font-size:1.05rem; margin:26px 0 10px; }
+  .btns { display:flex; flex-wrap:wrap; gap:8px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 14px; font-size:.9rem; cursor:pointer; }
+  button.sec { background:#e8eef6; color:var(--accent); }
+  .hint { font-size:.8rem; color:var(--muted); margin-top:8px; }
+  @media (max-width: 480px) {
+    body { padding:12px 10px; }
+    .card { padding:18px; }
+    .tile .v { font-size:1.25rem; }
+    .btns button { flex:1 1 100%; padding:14px; font-size:1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Arbeitszeitrechner</h1>
+  <p class="sub">Mittagspause: <b>40 Min.</b> · Grenze: <b>10 Std. netto</b></p>
+
+  <div class="row">
+    <div><label for="start">Arbeitsbeginn</label><input type="time" id="start"></div>
+    <div><label for="end">Arbeitsende (optional)</label><input type="time" id="end"></div>
+  </div>
+
+  <div class="results">
+    <div class="tile"><div class="k">Brutto-Arbeitszeit</div><div class="v" id="brutto">–</div></div>
+    <div class="tile"><div class="k">Netto-Arbeitszeit</div><div class="v" id="netto">–</div></div>
+    <div class="tile"><div class="k">Arbeitsende bei 8 Std. netto</div><div class="v" id="end8">–</div></div>
+    <div class="tile"><div class="k">Spätestes Ende (10 Std. netto)</div><div class="v" id="end10">–</div></div>
+  </div>
+  <div class="bar"><span id="barFill" style="width:0"></span></div>
+  <div class="status" id="status" style="display:none"></div>
+
+  <h2>Erinnerung</h2>
+  <div class="row">
+    <div><label for="lead">Minuten vor 10-Std.-Grenze erinnern</label><input type="number" id="lead" value="15" min="0" max="120"></div>
+  </div>
+  <div class="btns" style="margin-top:10px">
+    <button id="btnOutlook">📅 Termin in Outlook</button>
+    <button id="btnIcs" class="sec">📅 Kalenderdatei (.ics)</button>
+    <button id="btnMail" class="sec">✉️ Mail an mich</button>
+    <button id="btnNotify" class="sec">🔔 Browser-Hinweis</button>
+  </div>
+  <div class="status" id="autoStatus" style="display:none"></div>
+  <p class="hint" id="hint">„Termin in Outlook“ öffnet einen fertigen Termin im Outlook-Kalender – nur noch speichern. „Mail an mich“ öffnet einen fertigen Mail-Entwurf.</p>
+</div>
+
+<script>
+const PAUSE = 40, MAX_NET = 600, EMAIL = "david.sinaga@speira.com";
+const $ = id => document.getElementById(id);
+
+const toMin = t => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+const fmtTime = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
+const fmtDur = m => { const s = m < 0 ? "-" : ""; m = Math.abs(m); return `${s}${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")} h`; };
+
+function calc() {
+  const s = toMin($("start").value), e = toMin($("end").value);
+  localStorage.setItem("az_start", $("start").value);
+  localStorage.setItem("az_lead", $("lead").value);
+  if (s === null) return null;
+  const latest = s + MAX_NET + PAUSE;
+  const r = { s, latest, end8: s + 480 + PAUSE };
+  if (e !== null) {
+    let brutto = e - s; if (brutto < 0) brutto += 1440;
+    r.brutto = brutto;
+    r.netto = Math.max(0, brutto - PAUSE);
+  } else {
+    // ohne Ende: aktueller Stand bis jetzt
+    const now = new Date(), n = now.getHours() * 60 + now.getMinutes();
+    let brutto = n - s; if (brutto < 0) brutto = 0;
+    r.brutto = brutto; r.netto = Math.max(0, brutto - PAUSE); r.live = true;
+  }
+  return r;
+}
+
+function render() {
+  const r = calc(), st = $("status");
+  if (!r) { ["brutto","netto","end8","end10"].forEach(id => $(id).textContent = "–"); st.style.display = "none"; return; }
+  $("brutto").textContent = fmtDur(r.brutto) + (r.live ? " *" : "");
+  $("netto").textContent = fmtDur(r.netto) + (r.live ? " *" : "");
+  $("end8").textContent = fmtTime(r.end8);
+  $("end10").textContent = fmtTime(r.latest);
+  const pct = Math.min(100, r.netto / MAX_NET * 100);
+  $("barFill").style.width = pct + "%";
+  const rest = MAX_NET - r.netto;
+  st.style.display = "block";
+  if (rest < 0) { st.className = "status bad"; st.textContent = `⚠️ 10-Stunden-Grenze um ${fmtDur(-rest)} überschritten!`; $("barFill").style.background = "var(--bad)"; }
+  else if (rest <= 60) { st.className = "status warn"; st.textContent = `Achtung: nur noch ${fmtDur(rest)} bis zur 10-Std.-Grenze (${fmtTime(r.latest)}).`; $("barFill").style.background = "var(--warn)"; }
+  else { st.className = "status ok"; st.textContent = `✔ Im Rahmen – noch ${fmtDur(rest)} bis zur 10-Std.-Grenze.` + (r.live ? " (* Stand jetzt)" : ""); $("barFill").style.background = "var(--ok)"; }
+}
+
+function reminderTime() {
+  const r = calc(); if (!r) { alert("Bitte zuerst den Arbeitsbeginn eingeben."); return null; }
+  const lead = Math.max(0, Number($("lead").value) || 0);
+  return { r, lead, remindAt: r.latest - lead };
+}
+
+// Outlook-/Kalender-Termin mit Erinnerung
+$("btnIcs").onclick = () => {
+  const x = reminderTime(); if (!x) return;
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  const at = new Date(d.getTime() + x.r.latest * 60000);
+  const pad = n => String(n).padStart(2, "0");
+  const stamp = t => `${t.getFullYear()}${pad(t.getMonth()+1)}${pad(t.getDate())}T${pad(t.getHours())}${pad(t.getMinutes())}00`;
+  const ics = [
+    "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Arbeitszeitrechner//DE","METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:${Date.now()}@arbeitszeitrechner`,
+    `DTSTAMP:${stamp(new Date())}`,
+    `DTSTART:${stamp(at)}`, `DTEND:${stamp(new Date(at.getTime() + 5 * 60000))}`,
+    `SUMMARY:Feierabend! 10-Std.-Grenze um ${fmtTime(x.r.latest)}`,
+    `DESCRIPTION:Arbeitsbeginn ${fmtTime(x.r.s)}\\, Pause 40 Min.\\nSpätestes Arbeitsende: ${fmtTime(x.r.latest)}`,
+    `ORGANIZER:mailto:${EMAIL}`,
+    "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:Arbeitszeit-Erinnerung",`TRIGGER:-PT${x.lead}M`,"END:VALARM",
+    "BEGIN:VALARM","ACTION:EMAIL",`ATTENDEE:mailto:${EMAIL}`,"SUMMARY:Arbeitszeit-Erinnerung",
+    `DESCRIPTION:In ${x.lead} Minuten erreichst du die 10-Stunden-Grenze (${fmtTime(x.r.latest)}).`,`TRIGGER:-PT${x.lead}M`,"END:VALARM",
+    "END:VEVENT","END:VCALENDAR"
+  ].join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+  a.download = `Arbeitsende_${fmtTime(x.r.latest).replace(":", "")}.ics`;
+  a.click();
+};
+
+// Termin direkt in Outlook (Web oder App) anlegen – funktioniert auch am Handy
+$("btnOutlook").onclick = () => {
+  const x = reminderTime(); if (!x) return;
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  const at = new Date(d.getTime() + x.r.latest * 60000);
+  const pad = n => String(n).padStart(2, "0");
+  const iso = t => {
+    const o = -t.getTimezoneOffset(), sign = o >= 0 ? "+" : "-";
+    return `${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}:00${sign}${pad(Math.floor(Math.abs(o) / 60))}:${pad(Math.abs(o) % 60)}`;
+  };
+  const q = new URLSearchParams({
+    subject: `Feierabend! 10-Std.-Grenze um ${fmtTime(x.r.latest)}`,
+    body: `Arbeitsbeginn ${fmtTime(x.r.s)}, Pause 40 Min. Spätestes Arbeitsende: ${fmtTime(x.r.latest)}`,
+    startdt: iso(at), enddt: iso(new Date(at.getTime() + 5 * 60000))
+  });
+  window.open("https://outlook.office.com/calendar/deeplink/compose?" + q.toString(), "_blank");
+};
+
+// Mail-Entwurf an mich (geplantes Senden in Outlook möglich)
+$("btnMail").onclick = () => {
+  const x = reminderTime(); if (!x) return;
+  const subj = `Arbeitszeit: spätestes Ende ${fmtTime(x.r.latest)}`;
+  const body = `Hallo David,\n\nArbeitsbeginn: ${fmtTime(x.r.s)}\nMittagspause: 40 Min.\nArbeitsende bei 8 Std. netto: ${fmtTime(x.r.end8)}\nSpätestes Arbeitsende (10 Std. netto): ${fmtTime(x.r.latest)}\n\nBitte rechtzeitig Feierabend machen!`;
+  location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+};
+
+// Desktop-Benachrichtigung, solange der Tab offen ist
+let timer = null;
+$("btnNotify").onclick = async () => {
+  const x = reminderTime(); if (!x) return;
+  if (!("Notification" in window)) return alert("Browser unterstützt keine Benachrichtigungen.");
+  if (await Notification.requestPermission() !== "granted") return alert("Benachrichtigungen wurden nicht erlaubt.");
+  const now = new Date(), n = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  const ms = Math.max(0, (x.remindAt - n) * 60000);
+  clearTimeout(timer);
+  timer = setTimeout(() => new Notification("Arbeitszeit-Erinnerung", { body: `Spätestes Arbeitsende: ${fmtTime(x.r.latest)}` }), ms);
+  $("hint").textContent = `🔔 Browser-Hinweis gesetzt für ${fmtTime(x.remindAt)} (Tab muss offen bleiben).`;
+};
+
+// Automatik: über server.ps1 (Outlook) Mail senden + Kalendereintrag setzen
+// Nur am PC über den lokalen Server; online (GitHub Pages / Handy) gibt es die manuellen Buttons
+const AUTO = location.hostname === "localhost";
+const MOBILE = /Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));   // iPadOS meldet sich als Mac
+if (MOBILE) $("btnNotify").style.display = "none";   // Timer laufen am Handy im Hintergrund nicht zuverlässig
+if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
+let autoTimer = null;
+function showAuto(cls, text) { const el = $("autoStatus"); el.style.display = "block"; el.className = "status " + cls; el.textContent = text; }
+
+function buildPayload() {
+  const r = calc(); if (!r) return null;
+  const lead = Math.max(0, Number($("lead").value) || 0);
+  const body = `Hallo David,\n\nArbeitsbeginn: ${fmtTime(r.s)}\nMittagspause: 40 Min.\nArbeitsende bei 8 Std. netto: ${fmtTime(r.end8)}\nSpätestes Arbeitsende (10 Std. netto): ${fmtTime(r.latest)}\n\nDu wirst ${lead} Min. vorher per Outlook-Kalender erinnert.\nBitte rechtzeitig Feierabend machen!`;
+  return {
+    start: fmtTime(r.s), latest: fmtTime(r.latest), latestNextDay: r.latest >= 1440, lead,
+    mailSubject: `Arbeitszeit heute: Beginn ${fmtTime(r.s)} – spätestes Ende ${fmtTime(r.latest)}`,
+    apptSubject: `Feierabend! 10-Std.-Grenze um ${fmtTime(r.latest)}`,
+    body
+  };
+}
+
+async function autoSend() {
+  const p = buildPayload(); if (!p) return;
+  showAuto("warn", "⏳ Sende Mail und lege Kalendereintrag an …");
+  try {
+    const res = await fetch("/api/reminder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
+    const j = await res.json();
+    showAuto(j.ok ? "ok" : "bad", (j.ok ? "✔ " : "⚠️ ") + (j.skipped ? `Heute schon erledigt (Beginn ${p.start}, Ende ${p.latest}).` : j.message));
+  } catch (e) { showAuto("bad", "⚠️ Server nicht erreichbar – bitte über „Start-Arbeitszeitrechner.cmd“ starten."); }
+}
+
+function scheduleAuto() {
+  if (!AUTO || !$("start").value) return;
+  clearTimeout(autoTimer);
+  showAuto("warn", "⏳ Automatische Mail + Kalendereintrag in 3 Sekunden …");
+  autoTimer = setTimeout(autoSend, 3000);   // kurz warten, bis die Eingabe fertig ist
+}
+
+if (AUTO) {
+  $("start").addEventListener("input", scheduleAuto);
+  $("lead").addEventListener("input", scheduleAuto);
+  fetch("/api/status").then(r => r.json()).then(j => {
+    if (j.today) showAuto("ok", `✔ Heute bereits gesendet und im Kalender eingetragen (Beginn ${j.start}).`);
+  }).catch(() => {});
+} else if (location.protocol === "file:") {
+  showAuto("warn", "ℹ️ Automatik aus: Seite wurde direkt geöffnet. Für automatische Mail + Kalendereintrag „Start-Arbeitszeitrechner.cmd“ starten.");
+}
+
+$("start").value = localStorage.getItem("az_start") || "";
+$("lead").value = localStorage.getItem("az_lead") || "15";
+["start", "end", "lead"].forEach(id => $(id).addEventListener("input", render));
+setInterval(render, 30000);
+render();
+</script>
+</body>
+</html>
