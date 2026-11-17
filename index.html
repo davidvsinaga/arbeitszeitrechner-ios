@@ -20,15 +20,17 @@
   .card { background:var(--card); border-radius:14px; box-shadow:0 4px 20px rgba(0,0,0,.08); padding:28px; width:100%; max-width:480px; }
   h1 { margin:0 0 4px; font-size:1.5rem; }
   .sub { color:var(--muted); margin:0 0 22px; font-size:.9rem; }
-  .row { display:flex; gap:14px; }
-  .row > div { flex:1; }
+  .row { display:flex; flex-wrap:wrap; gap:14px; margin-bottom:12px; }
+  .row > div { flex:1 1 160px; }
   label { display:block; font-size:.85rem; color:var(--muted); margin-bottom:4px; }
-  input[type=time], input[type=number] { width:100%; padding:10px; font-size:1.1rem; border:1px solid #cfd5df; border-radius:8px; }
-  .results { margin-top:22px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  input[type=time], input[type=number], input[type=datetime-local], select { width:100%; padding:10px; font-size:1.05rem; border:1px solid #cfd5df; border-radius:8px; background:#fff; color:var(--txt); font-family:inherit; }
+  label.chk { display:flex; align-items:center; gap:8px; font-size:1rem; color:var(--txt); cursor:pointer; margin-bottom:12px; }
+  label.chk input { width:20px; height:20px; }
+  .results { margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .tile { background:var(--bg); border-radius:10px; padding:12px 14px; }
   .tile .k { font-size:.78rem; color:var(--muted); }
   .tile .v { font-size:1.45rem; font-weight:600; margin-top:2px; }
-  .status { margin-top:16px; padding:12px 14px; border-radius:10px; font-weight:500; }
+  .status { margin-top:12px; padding:12px 14px; border-radius:10px; font-weight:500; }
   .status.ok { background:#e6f4ec; color:var(--ok); }
   .status.warn { background:#fff3e0; color:var(--warn); }
   .status.bad { background:#fdecea; color:var(--bad); }
@@ -39,6 +41,10 @@
   button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 14px; font-size:.9rem; cursor:pointer; }
   button.sec { background:#e8eef6; color:var(--accent); }
   .hint { font-size:.8rem; color:var(--muted); margin-top:8px; }
+  .ein { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; align-items:center; }
+  .ein input { flex:1 1 150px; }
+  .ein button { padding:10px 12px; }
+  #rbBox { border-left:3px solid var(--accent); padding-left:12px; }
   @media (max-width: 480px) {
     body { padding:12px 10px; }
     .card { padding:18px; }
@@ -59,18 +65,46 @@
 
   <div class="results">
     <div class="tile"><div class="k">Brutto-Arbeitszeit</div><div class="v" id="brutto">–</div></div>
-    <div class="tile"><div class="k">Netto-Arbeitszeit</div><div class="v" id="netto">–</div></div>
-    <div class="tile"><div class="k">Arbeitsende bei 8 Std. netto</div><div class="v" id="end8">–</div></div>
-    <div class="tile"><div class="k">Spätestes Ende (10 Std. netto)</div><div class="v" id="end10">–</div></div>
+    <div class="tile"><div class="k" id="kNetto">Netto-Arbeitszeit</div><div class="v" id="netto">–</div></div>
+    <div class="tile"><div class="k" id="k8">Arbeitsende bei 8 Std. netto</div><div class="v" id="end8">–</div></div>
+    <div class="tile"><div class="k" id="k10">Spätestes Ende (10 Std. netto)</div><div class="v" id="end10">–</div></div>
   </div>
   <div class="bar"><span id="barFill" style="width:0"></span></div>
   <div class="status" id="status" style="display:none"></div>
 
+  <h2>Abwesenheiten (z. B. Arztbesuch)</h2>
+  <div id="absList"></div>
+  <div class="btns">
+    <button id="absOut" class="sec">🚪 Jetzt abmelden</button>
+    <button id="absAdd" class="sec">+ Abwesenheit nachtragen</button>
+  </div>
+  <p class="hint" id="absInfo">Abwesenheiten zählen nicht zur Arbeitszeit – das Arbeitsende verschiebt sich entsprechend nach hinten.</p>
+
+  <h2>Rufbereitschaft</h2>
+  <label class="chk"><input type="checkbox" id="rbActive"> Ich habe Rufbereitschaft</label>
+  <div id="rbBox" style="display:none">
+    <div class="row">
+      <div><label for="rbDay">Tag der Rufbereitschaft</label>
+        <select id="rbDay"><option value="1">1. Tag</option><option value="2">2. Tag oder später</option></select></div>
+      <div><label for="rbRegel">Regelarbeitszeit (netto)</label><input type="time" id="rbRegel" value="08:00"></div>
+    </div>
+    <div class="row">
+      <div><label for="rbPlanned">Regulärer Arbeitsbeginn</label><input type="time" id="rbPlanned" value="08:00"></div>
+      <div><label for="rbPrevEnd">Letztes Arbeitsende vor dem Einsatz</label><input type="datetime-local" id="rbPrevEnd"></div>
+    </div>
+    <label>Einsätze (von – bis, inkl. Fahrtzeit)</label>
+    <div id="rbList"></div>
+    <button id="rbAdd" class="sec">+ Einsatz hinzufügen</button>
+    <div id="rbResult"></div>
+    <p class="hint">Regeln lt. Betriebsvereinbarung zur Rufbereitschaft im Werk Grevenbroich (Stand 13.06.2018): 6 Std. Schlafenszeit am Stück zwischen 22:00 und 6:00 Uhr nach einem Einsatz · 1. Tag: mind. 6 Std. Ruhe am Stück · ab 2. Tag: mind. 11 Std. Ruhe gesamt (Blöcke vor + nach dem Einsatz) · entfällt, wenn vor dem Einsatz schon 11 Std. Ruhe am Stück · im 24-Std.-Arbeitstag (laut HR 06:00 bis 06:00 Uhr) inkl. Einsätzen nicht mehr als die Regelarbeitszeit.</p>
+  </div>
+
   <h2>Erinnerung</h2>
   <div class="row">
-    <div><label for="lead">Minuten vor 10-Std.-Grenze erinnern</label><input type="number" id="lead" value="15" min="0" max="120"></div>
+    <div><label for="lead" id="leadLabel">Minuten vor 10-Std.-Grenze erinnern</label><input type="number" id="lead" value="15" min="0" max="120"></div>
   </div>
-  <div class="btns" style="margin-top:10px">
+  <div class="btns">
+    <button id="btnOutlookRb" style="display:none">📅 Rufbereitschaft: 8-Std.-Termin in Outlook</button>
     <button id="btnOutlook">📅 Termin in Outlook</button>
     <button id="btnIcs" class="sec">📅 Kalenderdatei (.ics)</button>
     <button id="btnMail" class="sec">✉️ Mail an mich</button>
@@ -81,119 +115,337 @@
 </div>
 
 <script>
-const PAUSE = 40, MAX_NET = 600, EMAIL = "david.sinaga@speira.com";
+const PAUSE = 40, MAX_NET = 600, EMAIL = "david.sinaga@speira.com", H = 3600000;
 const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
 
 const toMin = t => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-const fmtTime = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
-const fmtDur = m => { const s = m < 0 ? "-" : ""; m = Math.abs(m); return `${s}${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")} h`; };
+const fmtTime = m => { m = ((m % 1440) + 1440) % 1440; return pad(Math.floor(m / 60)) + ":" + pad(m % 60); };
+const fmtDur = m => { const s = m < 0 ? "-" : ""; m = Math.abs(m); return `${s}${Math.floor(m / 60)}:${pad(m % 60)} h`; };
+const fmtH = ms => fmtDur(Math.round(ms / 60000));
+const fmtDT = d => d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const parseDT = v => v ? new Date(v) : null;   // datetime-local = lokale Zeit
+const later = (a, b) => a > b ? a : b;
 
+// ---------- Rufbereitschaft ----------
+let rbEin = JSON.parse(localStorage.getItem("az_rb_ein") || "[]");   // [{von, bis}] als datetime-local-Text
+
+// Einsatzminuten innerhalb [a, b)
+const overlap = (list, a, b) => list.reduce((sum, e) => sum + Math.max(0, Math.min(e.bis, b) - Math.max(e.von, a)), 0) / 60000;
+
+function rbState() {
+  const list = rbEin.map(e => ({ von: parseDT(e.von), bis: parseDT(e.bis) }))
+                    .filter(e => e.von && e.bis && e.bis > e.von).sort((a, b) => a.von - b.von);
+  let prevEnd = parseDT($("rbPrevEnd").value);
+  if (!prevEnd && $("end").value) prevEnd = new Date(today0().getTime() + toMin($("end").value) * 60000);
+  if (prevEnd && list.length && prevEnd > list[0].von) prevEnd = null;   // muss vor dem ersten Einsatz liegen
+  return {
+    active: $("rbActive").checked,
+    day: Number($("rbDay").value),
+    regel: toMin($("rbRegel").value) ?? 480,
+    planned: toMin($("rbPlanned").value) ?? 480,
+    prevEnd, list
+  };
+}
+
+// Beginn des 24-Std.-Arbeitstags, in den der Arbeitsbeginn ws fällt.
+// Laut HR beginnt der Arbeitstag immer um 06:00 Uhr und endet am Folgetag um 06:00 Uhr.
+const WORKDAY_START = 6 * 60;
+function workDayStart(ws) {
+  const d = new Date(ws); d.setHours(0, WORKDAY_START, 0, 0);
+  if (ws < d) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+// Prüft die Ruhezeit-Regeln der BV und liefert den frühesten erlaubten Arbeitsbeginn
+function rbCheck(rb) {
+  const list = rb.list; if (!list.length) return null;
+  const last = list[list.length - 1].bis;
+  // nächster Arbeitstag: Einsatz endet vor dem regulären Beginn → gleicher Tag, sonst Folgetag
+  const day = new Date(last); day.setHours(0, 0, 0, 0);
+  if (last.getHours() * 60 + last.getMinutes() >= rb.planned) day.setDate(day.getDate() + 1);
+  const planned = new Date(day.getTime() + rb.planned * 60000);
+  const wEnd = new Date(day); wEnd.setHours(6, 0, 0, 0);
+  const wStart = new Date(day); wStart.setDate(wStart.getDate() - 1); wStart.setHours(22, 0, 0, 0);
+
+  // Ruheblöcke vor dem letzten Einsatzende (ohne Arbeitsende: konservativ ab 22:00 angenommen)
+  const rest0 = rb.prevEnd && rb.prevEnd <= list[0].von ? rb.prevEnd : null;
+  const blocks = []; let cur = rest0 || (wStart < list[0].von ? wStart : list[0].von);
+  for (const e of list) { if (e.von > cur) blocks.push([cur, e.von]); if (e.bis > cur) cur = e.bis; }
+  const len = ([a, b]) => b - a;
+  const clip = ([a, b]) => [later(a, wStart), b < wEnd ? b : wEnd];
+
+  const rules = []; let earliest = planned;
+  const exception = rest0 && list[0].von - rest0 >= 11 * H;
+  if (!rest0) rules.push({ ok: null, text: "Letztes Arbeitsende vor dem Einsatz fehlt – Ruhe vor dem Einsatz wird erst ab 22:00 Uhr gerechnet." });
+
+  if (exception) {
+    rules.push({ ok: true, text: `Vor dem Einsatz bereits ${fmtH(list[0].von - rest0)} Ruhe am Stück (≥ 11 Std.) – die Schlafenszeit-Regel entfällt.` });
+  } else {
+    const sleep = [...blocks, [last, wEnd]].map(clip).filter(b => len(b) > 0);
+    if (sleep.some(b => len(b) >= 6 * H)) rules.push({ ok: true, text: "Schlafenszeit: 6 Std. am Stück zwischen 22:00 und 6:00 Uhr eingehalten." });
+    else {
+      const t = new Date(last.getTime() + 6 * H);
+      if (t <= planned) rules.push({ ok: null, text: `Schlafenszeit (6 Std. am Stück zwischen 22:00 und 6:00 Uhr) nicht erreicht – 6 Std. Ruhe aber bis ${fmtDT(t)}, regulärer Beginn ist möglich.` });
+      else rules.push({ ok: false, text: `Schlafenszeit (6 Std. am Stück zwischen 22:00 und 6:00 Uhr) nicht erreicht → bezahlt freigestellt bis ${fmtDT(t)}.` });
+      earliest = later(earliest, t);
+    }
+  }
+
+  if (rb.day === 1) {
+    const t = new Date(last.getTime() + 6 * H);
+    if (blocks.some(b => len(b) >= 6 * H) || t <= planned) rules.push({ ok: true, text: "1. Tag: mind. 6 Std. Ruhe am Stück eingehalten." });
+    else { rules.push({ ok: false, text: `1. Tag: 6 Std. Ruhe am Stück erst um ${fmtDT(t)} erreicht.` }); earliest = later(earliest, t); }
+  } else if (!rest0) {
+    rules.push({ ok: false, text: "Ab 2. Tag: Bitte „Letztes Arbeitsende vor dem Einsatz“ eingeben, um die 11-Std.-Ruhezeit zu prüfen." });
+  } else {
+    const work = overlap(list, rest0, new Date(8.64e15)) * 60000;
+    const t = new Date(rest0.getTime() + 11 * H + work);
+    if (t <= planned) rules.push({ ok: true, text: `Ab 2. Tag: 11 Std. Ruhe gesamt bis zum Arbeitsbeginn erreicht (Einsätze: ${fmtH(work)}).` });
+    else { rules.push({ ok: false, text: `Ab 2. Tag: 11 Std. Ruhe gesamt (vor + nach dem Einsatz) erst um ${fmtDT(t)} erreicht.` }); earliest = later(earliest, t); }
+  }
+  return { earliest, planned, rules };
+}
+
+function rbRenderList() {
+  $("rbList").innerHTML = "";
+  rbEin.forEach((e, i) => {
+    const row = document.createElement("div"); row.className = "ein";
+    row.innerHTML = `<input type="datetime-local" aria-label="Einsatz von"> <input type="datetime-local" aria-label="Einsatz bis"> <button class="sec" title="Einsatz löschen">✕</button>`;
+    const [von, bis, del] = row.children;
+    von.value = e.von; bis.value = e.bis;
+    von.oninput = () => { e.von = von.value; rbSave(); };
+    bis.oninput = () => { e.bis = bis.value; rbSave(); };
+    del.onclick = () => { rbEin.splice(i, 1); rbSave(); rbRenderList(); };
+    $("rbList").appendChild(row);
+  });
+}
+
+function rbSave() {
+  localStorage.setItem("az_rb_ein", JSON.stringify(rbEin));
+  localStorage.setItem("az_rb", JSON.stringify({ v2: true, active: $("rbActive").checked, day: $("rbDay").value, regel: $("rbRegel").value, planned: $("rbPlanned").value, prevEnd: $("rbPrevEnd").value }));
+  render();
+}
+
+function rbRenderResult(rb) {
+  const box = $("rbResult"); box.innerHTML = "";
+  const c = rbCheck(rb);
+  if (!c) { box.innerHTML = `<p class="hint">Noch kein Einsatz eingetragen.</p>`; return null; }
+  c.rules.forEach(r => {
+    const el = document.createElement("div");
+    el.className = "status " + (r.ok === true ? "ok" : r.ok === false ? "bad" : "warn");
+    el.textContent = (r.ok === true ? "✔ " : "⚠️ ") + r.text;
+    box.appendChild(el);
+  });
+  const el = document.createElement("div");
+  const shifted = c.earliest > c.planned;
+  el.className = "status " + (shifted ? "warn" : "ok");
+  el.innerHTML = `<b>Frühester Arbeitsbeginn: ${fmtDT(c.earliest)}</b>` +
+    (shifted ? `<br>Statt ${fmtDT(c.planned)} – die ausfallenden Stunden werden vom Unternehmen vergütet.` : "");
+  box.appendChild(el);
+  return c;
+}
+
+// ---------- Abwesenheiten (z. B. Arztbesuch): abmelden / wieder anmelden ----------
+const todayKey = () => new Date().toDateString();
+const nowMin = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); };
+let absData = JSON.parse(localStorage.getItem("az_abs") || "null");
+if (!absData || absData.date !== todayKey()) absData = { date: todayKey(), list: [] };   // jeden Tag neu
+
+// Abwesenheiten als Minuten-Intervalle ab Arbeitsbeginn s (über Mitternacht fortlaufend); offen = noch abgemeldet
+function absIntervals(s) {
+  const rel = m => m < s ? m + 1440 : m;
+  return absData.list.map(a => {
+    const von = toMin(a.ab); if (von === null) return null;
+    const v = rel(von), b = a.zu ? rel(toMin(a.zu)) : Math.max(v, rel(nowMin()));
+    return b > v ? [v, b, !a.zu] : null;
+  }).filter(Boolean);
+}
+
+function absSave() {
+  absData.date = todayKey();
+  localStorage.setItem("az_abs", JSON.stringify(absData));
+  render();
+  scheduleAuto();
+}
+
+function absRenderList() {
+  $("absList").innerHTML = "";
+  absData.list.forEach((a, i) => {
+    const row = document.createElement("div"); row.className = "ein";
+    row.innerHTML = `<input type="time" aria-label="Abgemeldet um"> <input type="time" aria-label="Wieder angemeldet um"> <button title="Jetzt wieder anmelden">✅ Jetzt anmelden</button> <button class="sec" title="Abwesenheit löschen">✕</button>`;
+    const [ab, zu, inBtn, del] = row.children;
+    ab.value = a.ab; zu.value = a.zu;
+    inBtn.style.display = a.zu ? "none" : "";
+    ab.oninput = () => { a.ab = ab.value; absSave(); };
+    zu.oninput = () => { a.zu = zu.value; inBtn.style.display = a.zu ? "none" : ""; $("absOut").disabled = absData.list.some(x => !x.zu); absSave(); };
+    inBtn.onclick = () => { a.zu = fmtTime(nowMin()); absSave(); absRenderList(); };
+    del.onclick = () => { absData.list.splice(i, 1); absSave(); absRenderList(); };
+    $("absList").appendChild(row);
+  });
+  $("absOut").disabled = absData.list.some(a => !a.zu);
+}
+
+// ---------- Arbeitszeit ----------
 function calc() {
   const s = toMin($("start").value), e = toMin($("end").value);
   localStorage.setItem("az_start", $("start").value);
   localStorage.setItem("az_lead", $("lead").value);
   if (s === null) return null;
-  const latest = s + MAX_NET + PAUSE;
-  const r = { s, latest, end8: s + 480 + PAUSE };
+  const rb = rbState();
+  // 24-Std.-Arbeitstag: Einsätze darin zählen zur heutigen Arbeitszeit
+  const ws = new Date(today0().getTime() + s * 60000);
+  const wd = workDayStart(ws);
+  const ein = rb.active ? Math.round(overlap(rb.list, wd, new Date(wd.getTime() + 24 * H))) : 0;
+  const regel = rb.active ? rb.regel : 480;
+  // Abwesenheiten verschieben das Arbeitsende nach hinten
+  const abs = absIntervals(s), absAll = abs.reduce((t, [a, b]) => t + b - a, 0);
+  const r = { s, ws, wd, ein, regel, rb: rb.active, absAll, absOpen: abs.some(x => x[2]),
+              latest: s + PAUSE + MAX_NET - ein + absAll, end8: s + PAUSE + regel - ein + absAll };
+  r.target = r.rb ? Math.min(r.end8, r.latest) : r.latest;   // darauf zielt die Erinnerung
+  r.targetName = r.rb ? "Regelarbeitszeit" : "10-Std.-Grenze";
   if (e !== null) {
     let brutto = e - s; if (brutto < 0) brutto += 1440;
     r.brutto = brutto;
-    r.netto = Math.max(0, brutto - PAUSE);
   } else {
     // ohne Ende: aktueller Stand bis jetzt
-    const now = new Date(), n = now.getHours() * 60 + now.getMinutes();
-    let brutto = n - s; if (brutto < 0) brutto = 0;
-    r.brutto = brutto; r.netto = Math.max(0, brutto - PAUSE); r.live = true;
+    r.brutto = Math.max(0, nowMin() - s); r.live = true;
   }
+  // nur Abwesenheiten zwischen Beginn und Ende (bzw. jetzt) mindern die Netto-Zeit
+  r.abs = abs.reduce((t, [a, b]) => t + Math.max(0, Math.min(b, s + r.brutto) - Math.max(a, s)), 0);
+  r.netto = Math.max(0, r.brutto - PAUSE - r.abs);
+  r.total = r.netto + ein;
   return r;
 }
 
 function render() {
+  const rbOn = $("rbActive").checked;
+  $("rbBox").style.display = rbOn ? "block" : "none";
+  const check = rbOn ? rbRenderResult(rbState()) : null;
+  $("k8").textContent = rbOn ? "Ende lt. Regelarbeitszeit" : "Arbeitsende bei 8 Std. netto";
+  $("k10").textContent = rbOn ? "Spätestes Ende (10 Std., ArbZG)" : "Spätestes Ende (10 Std. netto)";
+  $("kNetto").textContent = rbOn ? "Netto inkl. Einsätze (24 Std.)" : "Netto-Arbeitszeit";
+  $("leadLabel").textContent = rbOn ? "Minuten vorher erinnern (Regelarbeitszeit + 10-Std.-Grenze)" : "Minuten vor 10-Std.-Grenze erinnern";
+  $("btnOutlookRb").style.display = rbOn ? "" : "none";
+  $("btnOutlookRb").textContent = `📅 Rufbereitschaft: ${(toMin($("rbRegel").value) ?? 480) / 60}-Std.-Termin in Outlook`;
+  $("btnOutlook").textContent = rbOn ? "📅 10-Std.-Termin in Outlook" : "📅 Termin in Outlook";
+
   const r = calc(), st = $("status");
+  $("absInfo").textContent = !r || !r.absAll ? "Abwesenheiten zählen nicht zur Arbeitszeit – das Arbeitsende verschiebt sich entsprechend nach hinten."
+    : (r.absOpen ? "🚪 Du bist gerade abgemeldet. " : "") + `Abwesend heute: ${fmtDur(r.absAll)} – alle Arbeitsenden verschieben sich um diese Zeit nach hinten.`;
   if (!r) { ["brutto","netto","end8","end10"].forEach(id => $(id).textContent = "–"); st.style.display = "none"; return; }
-  $("brutto").textContent = fmtDur(r.brutto) + (r.live ? " *" : "");
-  $("netto").textContent = fmtDur(r.netto) + (r.live ? " *" : "");
+  const live = r.live ? " *" : "";
+  $("brutto").textContent = fmtDur(r.brutto) + live;
+  $("netto").textContent = fmtDur(r.total) + live;
   $("end8").textContent = fmtTime(r.end8);
   $("end10").textContent = fmtTime(r.latest);
-  const pct = Math.min(100, r.netto / MAX_NET * 100);
-  $("barFill").style.width = pct + "%";
-  const rest = MAX_NET - r.netto;
-  st.style.display = "block";
-  if (rest < 0) { st.className = "status bad"; st.textContent = `⚠️ 10-Stunden-Grenze um ${fmtDur(-rest)} überschritten!`; $("barFill").style.background = "var(--bad)"; }
-  else if (rest <= 60) { st.className = "status warn"; st.textContent = `Achtung: nur noch ${fmtDur(rest)} bis zur 10-Std.-Grenze (${fmtTime(r.latest)}).`; $("barFill").style.background = "var(--warn)"; }
-  else { st.className = "status ok"; st.textContent = `✔ Im Rahmen – noch ${fmtDur(rest)} bis zur 10-Std.-Grenze.` + (r.live ? " (* Stand jetzt)" : ""); $("barFill").style.background = "var(--ok)"; }
+
+  const limit = r.rb ? r.regel : MAX_NET;
+  $("barFill").style.width = Math.min(100, r.total / limit * 100) + "%";
+  const rest = limit - r.total;
+  const einTxt = r.ein ? ` (davon Einsätze: ${fmtDur(r.ein)} · 24-Std.-Arbeitstag ${fmtDT(r.wd)} – ${fmtDT(new Date(r.wd.getTime() + 24 * H))})` : "";
+  let cls, txt;
+  if (r.total > MAX_NET) { cls = "bad"; txt = `⚠️ 10-Stunden-Grenze (ArbZG) um ${fmtDur(r.total - MAX_NET)} überschritten!${einTxt}`; }
+  else if (rest < 0) { cls = "bad"; txt = `⚠️ Regelarbeitszeit im 24-Std.-Arbeitstag um ${fmtDur(-rest)} überschritten!${einTxt}`; }
+  else if (rest <= 60) { cls = "warn"; txt = `Achtung: nur noch ${fmtDur(rest)} bis zur ${r.targetName} (${fmtTime(r.target)}).${einTxt}`; }
+  else { cls = "ok"; txt = `✔ Im Rahmen – noch ${fmtDur(rest)} bis zur ${r.targetName}.${einTxt}` + (r.live ? " (* Stand jetzt)" : ""); }
+  if (r.absOpen) txt = "🚪 Abgemeldet – die Arbeitszeit läuft nicht. " + txt;
+  // Arbeitsbeginn heute vor dem frühesten erlaubten Beginn nach einem Einsatz?
+  if (check && r.ws < check.earliest && check.earliest - r.ws < 24 * H && r.ws.toDateString() === check.earliest.toDateString()) {
+    cls = "bad"; txt = `⚠️ Arbeitsbeginn ${fmtTime(r.s)} zu früh – wegen Ruhezeit nach dem Einsatz frühestens ${fmtTime(check.earliest.getHours() * 60 + check.earliest.getMinutes())}. ` + txt;
+  }
+  st.style.display = "block"; st.className = "status " + cls; st.textContent = txt;
+  $("barFill").style.background = `var(--${cls})`;
 }
 
 function reminderTime() {
   const r = calc(); if (!r) { alert("Bitte zuerst den Arbeitsbeginn eingeben."); return null; }
   const lead = Math.max(0, Number($("lead").value) || 0);
-  return { r, lead, remindAt: r.latest - lead };
+  return { r, lead, list: reminders(r) };
 }
 
-// Outlook-/Kalender-Termin mit Erinnerung
+// Erinnerungen: immer die 10-Std.-Grenze, bei Rufbereitschaft zusätzlich die Regelarbeitszeit (8 Std. netto)
+function reminders(r) {
+  const list = [{ at: r.latest, name: "10-Std.-Grenze (ArbZG)" }];
+  if (r.rb && r.end8 < r.latest) list.unshift({ at: r.end8, rb: true, name: `${(r.regel / 60).toLocaleString("de-DE")}-Std.-Grenze (Rufbereitschaft)` });
+  return list;
+}
+
+function mailBody(r, lead) {
+  let b = `Hallo David,\n\nArbeitsbeginn: ${fmtTime(r.s)}\nMittagspause: 40 Min.\n`;
+  if (r.absAll) b += `Abwesenheiten: ${absData.list.filter(a => a.ab).map(a => `${a.ab}–${a.zu || "offen"}`).join(", ")} (gesamt ${fmtDur(r.absAll)})\n`;
+  if (r.rb) b += `Rufbereitschaft: ja – Einsätze im 24-Std.-Arbeitstag: ${fmtDur(r.ein)}\nArbeitsende lt. Regelarbeitszeit (${fmtDur(r.regel)} netto): ${fmtTime(r.end8)} – bitte nicht überschreiten!\n`;
+  else b += `Arbeitsende bei 8 Std. netto: ${fmtTime(r.end8)}\n`;
+  b += `Spätestes Arbeitsende (10 Std. netto): ${fmtTime(r.latest)}\n\n`;
+  if (lead !== undefined) b += reminders(r).map(x => `Erinnerung ${lead} Min. vor ${fmtTime(x.at)} (${x.name}) per Outlook-Kalender.\n`).join("");
+  return b + "Bitte rechtzeitig Feierabend machen!";
+}
+
+const dateAt = m => new Date(today0().getTime() + m * 60000);
+
+// Outlook-/Kalender-Termin(e) mit Erinnerung
 $("btnIcs").onclick = () => {
   const x = reminderTime(); if (!x) return;
-  const d = new Date(); d.setHours(0, 0, 0, 0);
-  const at = new Date(d.getTime() + x.r.latest * 60000);
-  const pad = n => String(n).padStart(2, "0");
   const stamp = t => `${t.getFullYear()}${pad(t.getMonth()+1)}${pad(t.getDate())}T${pad(t.getHours())}${pad(t.getMinutes())}00`;
-  const ics = [
-    "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Arbeitszeitrechner//DE","METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    `UID:${Date.now()}@arbeitszeitrechner`,
-    `DTSTAMP:${stamp(new Date())}`,
-    `DTSTART:${stamp(at)}`, `DTEND:${stamp(new Date(at.getTime() + 5 * 60000))}`,
-    `SUMMARY:Feierabend! 10-Std.-Grenze um ${fmtTime(x.r.latest)}`,
-    `DESCRIPTION:Arbeitsbeginn ${fmtTime(x.r.s)}\\, Pause 40 Min.\\nSpätestes Arbeitsende: ${fmtTime(x.r.latest)}`,
-    `ORGANIZER:mailto:${EMAIL}`,
-    "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:Arbeitszeit-Erinnerung",`TRIGGER:-PT${x.lead}M`,"END:VALARM",
-    "BEGIN:VALARM","ACTION:EMAIL",`ATTENDEE:mailto:${EMAIL}`,"SUMMARY:Arbeitszeit-Erinnerung",
-    `DESCRIPTION:In ${x.lead} Minuten erreichst du die 10-Stunden-Grenze (${fmtTime(x.r.latest)}).`,`TRIGGER:-PT${x.lead}M`,"END:VALARM",
-    "END:VEVENT","END:VCALENDAR"
-  ].join("\r\n");
+  const events = x.list.flatMap((m, i) => {
+    const at = dateAt(m.at);
+    return [
+      "BEGIN:VEVENT",
+      `UID:${Date.now()}-${i}@arbeitszeitrechner`,
+      `DTSTAMP:${stamp(new Date())}`,
+      `DTSTART:${stamp(at)}`, `DTEND:${stamp(new Date(at.getTime() + 5 * 60000))}`,
+      `SUMMARY:Feierabend! ${m.name} um ${fmtTime(m.at)}`,
+      `DESCRIPTION:Arbeitsbeginn ${fmtTime(x.r.s)}\, Pause 40 Min.\nArbeitsende spätestens: ${fmtTime(m.at)}`,
+      `ORGANIZER:mailto:${EMAIL}`,
+      "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:Arbeitszeit-Erinnerung",`TRIGGER:-PT${x.lead}M`,"END:VALARM",
+      "BEGIN:VALARM","ACTION:EMAIL",`ATTENDEE:mailto:${EMAIL}`,"SUMMARY:Arbeitszeit-Erinnerung",
+      `DESCRIPTION:In ${x.lead} Minuten erreichst du die ${m.name} (${fmtTime(m.at)}).`,`TRIGGER:-PT${x.lead}M`,"END:VALARM",
+      "END:VEVENT"
+    ];
+  });
+  const ics = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Arbeitszeitrechner//DE","METHOD:PUBLISH", ...events, "END:VCALENDAR"].join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
-  a.download = `Arbeitsende_${fmtTime(x.r.latest).replace(":", "")}.ics`;
+  a.download = `Arbeitsende_${fmtTime(x.list[0].at).replace(":", "")}.ics`;
   a.click();
 };
 
 // Termin direkt in Outlook (Web oder App) anlegen – funktioniert auch am Handy
-$("btnOutlook").onclick = () => {
-  const x = reminderTime(); if (!x) return;
-  const d = new Date(); d.setHours(0, 0, 0, 0);
-  const at = new Date(d.getTime() + x.r.latest * 60000);
-  const pad = n => String(n).padStart(2, "0");
+function openOutlook(r, m) {
   const iso = t => {
     const o = -t.getTimezoneOffset(), sign = o >= 0 ? "+" : "-";
     return `${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}:00${sign}${pad(Math.floor(Math.abs(o) / 60))}:${pad(Math.abs(o) % 60)}`;
   };
+  const at = dateAt(m.at);
   const q = new URLSearchParams({
-    subject: `Feierabend! 10-Std.-Grenze um ${fmtTime(x.r.latest)}`,
-    body: `Arbeitsbeginn ${fmtTime(x.r.s)}, Pause 40 Min. Spätestes Arbeitsende: ${fmtTime(x.r.latest)}`,
+    subject: `Feierabend! ${m.name} um ${fmtTime(m.at)}`,
+    body: `Arbeitsbeginn ${fmtTime(r.s)}, Pause 40 Min. Arbeitsende spätestens: ${fmtTime(m.at)}`,
     startdt: iso(at), enddt: iso(new Date(at.getTime() + 5 * 60000))
   });
   window.open("https://outlook.office.com/calendar/deeplink/compose?" + q.toString(), "_blank");
-};
+}
+$("btnOutlook").onclick = () => { const x = reminderTime(); if (x) openOutlook(x.r, x.list[x.list.length - 1]); };
+$("btnOutlookRb").onclick = () => { const x = reminderTime(); if (x && x.list[0].rb) openOutlook(x.r, x.list[0]); };
 
 // Mail-Entwurf an mich (geplantes Senden in Outlook möglich)
 $("btnMail").onclick = () => {
   const x = reminderTime(); if (!x) return;
-  const subj = `Arbeitszeit: spätestes Ende ${fmtTime(x.r.latest)}`;
-  const body = `Hallo David,\n\nArbeitsbeginn: ${fmtTime(x.r.s)}\nMittagspause: 40 Min.\nArbeitsende bei 8 Std. netto: ${fmtTime(x.r.end8)}\nSpätestes Arbeitsende (10 Std. netto): ${fmtTime(x.r.latest)}\n\nBitte rechtzeitig Feierabend machen!`;
-  location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+  const subj = `Arbeitszeit: Arbeitsende spätestens ${fmtTime(x.list[0].at)}`;
+  location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(mailBody(x.r))}`;
 };
 
-// Desktop-Benachrichtigung, solange der Tab offen ist
-let timer = null;
+// Desktop-Benachrichtigung(en), solange der Tab offen ist
+let timers = [];
 $("btnNotify").onclick = async () => {
   const x = reminderTime(); if (!x) return;
   if (!("Notification" in window)) return alert("Browser unterstützt keine Benachrichtigungen.");
   if (await Notification.requestPermission() !== "granted") return alert("Benachrichtigungen wurden nicht erlaubt.");
   const now = new Date(), n = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
-  const ms = Math.max(0, (x.remindAt - n) * 60000);
-  clearTimeout(timer);
-  timer = setTimeout(() => new Notification("Arbeitszeit-Erinnerung", { body: `Spätestes Arbeitsende: ${fmtTime(x.r.latest)}` }), ms);
-  $("hint").textContent = `🔔 Browser-Hinweis gesetzt für ${fmtTime(x.remindAt)} (Tab muss offen bleiben).`;
+  timers.forEach(clearTimeout);
+  timers = x.list.map(m => setTimeout(() => new Notification("Arbeitszeit-Erinnerung", { body: `${m.name}: Arbeitsende spätestens ${fmtTime(m.at)}` }),
+                                      Math.max(0, (m.at - x.lead - n) * 60000)));
+  $("hint").textContent = `🔔 Browser-Hinweis gesetzt für ${x.list.map(m => fmtTime(m.at - x.lead)).join(" und ")} (Tab muss offen bleiben).`;
 };
 
 // Automatik: über server.ps1 (Outlook) Mail senden + Kalendereintrag setzen
@@ -208,12 +460,13 @@ function showAuto(cls, text) { const el = $("autoStatus"); el.style.display = "b
 function buildPayload() {
   const r = calc(); if (!r) return null;
   const lead = Math.max(0, Number($("lead").value) || 0);
-  const body = `Hallo David,\n\nArbeitsbeginn: ${fmtTime(r.s)}\nMittagspause: 40 Min.\nArbeitsende bei 8 Std. netto: ${fmtTime(r.end8)}\nSpätestes Arbeitsende (10 Std. netto): ${fmtTime(r.latest)}\n\nDu wirst ${lead} Min. vorher per Outlook-Kalender erinnert.\nBitte rechtzeitig Feierabend machen!`;
+  const list = reminders(r), main = list[list.length - 1], extra = list[0].rb ? list[0] : null;
   return {
-    start: fmtTime(r.s), latest: fmtTime(r.latest), latestNextDay: r.latest >= 1440, lead,
-    mailSubject: `Arbeitszeit heute: Beginn ${fmtTime(r.s)} – spätestes Ende ${fmtTime(r.latest)}`,
-    apptSubject: `Feierabend! 10-Std.-Grenze um ${fmtTime(r.latest)}`,
-    body
+    start: fmtTime(r.s), latest: fmtTime(main.at), latestNextDay: main.at >= 1440, lead,
+    mailSubject: `Arbeitszeit heute: Beginn ${fmtTime(r.s)} – Arbeitsende spätestens ${fmtTime(list[0].at)}`,
+    apptSubject: `Feierabend! ${main.name} um ${fmtTime(main.at)}`,
+    extra: extra ? { latest: fmtTime(extra.at), latestNextDay: extra.at >= 1440, apptSubject: `Feierabend! ${extra.name} um ${fmtTime(extra.at)}` } : null,
+    body: mailBody(r, lead)
   };
 }
 
@@ -223,13 +476,14 @@ async function autoSend() {
   try {
     const res = await fetch("/api/reminder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
     const j = await res.json();
-    showAuto(j.ok ? "ok" : "bad", (j.ok ? "✔ " : "⚠️ ") + (j.skipped ? `Heute schon erledigt (Beginn ${p.start}, Ende ${p.latest}).` : j.message));
+    showAuto(j.ok ? "ok" : "bad", (j.ok ? "✔ " : "⚠️ ") + (j.skipped ? `Heute schon erledigt (Beginn ${p.start}, Ende ${p.extra ? p.extra.latest : p.latest}).` : j.message));
   } catch (e) { showAuto("bad", "⚠️ Server nicht erreichbar – bitte über „Start-Arbeitszeitrechner.cmd“ starten."); }
 }
 
 function scheduleAuto() {
   if (!AUTO || !$("start").value) return;
   clearTimeout(autoTimer);
+  if (absData.list.some(a => !a.zu)) { showAuto("warn", "🚪 Abgemeldet – Mail und Kalender werden nach dem Wieder-Anmelden aktualisiert."); return; }
   showAuto("warn", "⏳ Automatische Mail + Kalendereintrag in 3 Sekunden …");
   autoTimer = setTimeout(autoSend, 3000);   // kurz warten, bis die Eingabe fertig ist
 }
@@ -237,12 +491,31 @@ function scheduleAuto() {
 if (AUTO) {
   $("start").addEventListener("input", scheduleAuto);
   $("lead").addEventListener("input", scheduleAuto);
+  ["rbActive", "rbRegel"].forEach(id => $(id).addEventListener("input", scheduleAuto));
   fetch("/api/status").then(r => r.json()).then(j => {
     if (j.today) showAuto("ok", `✔ Heute bereits gesendet und im Kalender eingetragen (Beginn ${j.start}).`);
   }).catch(() => {});
 } else if (location.protocol === "file:") {
   showAuto("warn", "ℹ️ Automatik aus: Seite wurde direkt geöffnet. Für automatische Mail + Kalendereintrag „Start-Arbeitszeitrechner.cmd“ starten.");
 }
+
+// Einstellungen wiederherstellen
+const rbSaved = JSON.parse(localStorage.getItem("az_rb") || "{}");
+$("rbActive").checked = !!rbSaved.active;
+if (rbSaved.day) $("rbDay").value = rbSaved.day;
+if (rbSaved.regel && !(rbSaved.regel === "07:00" && !rbSaved.v2)) $("rbRegel").value = rbSaved.regel;   // alter Standard 7 Std. → neu 8 Std.
+if (rbSaved.planned) $("rbPlanned").value = rbSaved.planned;
+if (rbSaved.prevEnd) $("rbPrevEnd").value = rbSaved.prevEnd;
+["rbActive", "rbDay", "rbRegel", "rbPlanned", "rbPrevEnd"].forEach(id => $(id).addEventListener("input", rbSave));
+$("rbAdd").onclick = () => {
+  const now = new Date(), v = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  rbEin.push({ von: v, bis: "" }); rbSave(); rbRenderList();
+};
+rbRenderList();
+
+$("absOut").onclick = () => { absData.list.push({ ab: fmtTime(nowMin()), zu: "" }); absSave(); absRenderList(); };
+$("absAdd").onclick = () => { absData.list.push({ ab: "", zu: "" }); absRenderList(); };
+absRenderList();
 
 $("start").value = localStorage.getItem("az_start") || "";
 $("lead").value = localStorage.getItem("az_lead") || "15";
